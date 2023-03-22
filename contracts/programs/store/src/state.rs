@@ -44,6 +44,7 @@ pub struct Feed<'a> {
 }
 
 #[account]
+#[derive(Debug, Default)]
 pub struct Transmissions {
     pub version: u8,
     pub state: u8,
