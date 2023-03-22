@@ -58,8 +58,8 @@ pub struct Transmissions {
     pub latest_round_id: u32,
     pub granularity: u8,
     pub live_length: u32,
-    live_cursor: u32,
-    historical_cursor: u32,
+    pub live_cursor: u32,
+    pub historical_cursor: u32,
 }
 
 impl Transmissions {
