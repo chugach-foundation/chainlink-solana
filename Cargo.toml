@@ -1,7 +1,7 @@
 [workspace]
 members = [
-  "programs/*",
-  "crates/*",
+  "contracts/programs/*",
+  "contracts/crates/*",
 ]
 
 [profile.dev]

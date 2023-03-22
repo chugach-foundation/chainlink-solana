@@ -9,7 +9,7 @@ pkg/bin
 
 v1/target
 
-contracts/target
+target
 contracts/programs/*/target
 contracts/.anchor
 # keypair used by anchor/anchor test
