@@ -4,8 +4,9 @@ use access_controller::AccessController;
 
 mod state;
 
-use crate::state::with_store;
-pub use crate::state::{NewTransmission, Store as State, Transmission, Transmissions};
+pub use crate::state::{
+    with_store, NewTransmission, Store as State, Transmission, Transmissions, HEADER_SIZE,
+};
 
 declare_id!("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
 
