@@ -53,7 +53,7 @@ pub mod access_controller {
     pub fn add_access(ctx: Context<AddAccess>) -> Result<()> {
         let mut state = ctx.accounts.state.load_mut()?;
         // if the len reaches array len, we're at capacity
-        require!(state.access_list.remaining_capacity() > 0, Full);
+        require!(state.access_list.remaining_capacity() > 0, ErrorCode::Full);
 
         let address = ctx.accounts.address.key();
 

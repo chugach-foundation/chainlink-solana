@@ -112,7 +112,7 @@ pub mod ocr2 {
         proposal.version = STATE_VERSION;
         proposal.owner = ctx.accounts.authority.key();
 
-        require!(offchain_config_version != 0, InvalidInput);
+        require!(offchain_config_version != 0, ErrorCode::InvalidInput);
         proposal.offchain_config.version = offchain_config_version;
         Ok(())
     }
@@ -122,11 +122,14 @@ pub mod ocr2 {
         offchain_config: Vec<u8>,
     ) -> Result<()> {
         let mut proposal = ctx.accounts.proposal.load_mut()?;
-        require!(proposal.state != Proposal::FINALIZED, InvalidInput);
+        require!(
+            proposal.state != Proposal::FINALIZED,
+            ErrorCode::InvalidInput
+        );
 
         require!(
             offchain_config.len() <= proposal.offchain_config.remaining_capacity(),
-            InvalidInput
+            ErrorCode::InvalidInput
         );
         proposal.offchain_config.extend(&offchain_config);
         Ok(())
@@ -134,19 +137,28 @@ pub mod ocr2 {
 
     pub fn finalize_proposal(ctx: Context<ProposeConfig>) -> Result<()> {
         let mut proposal = ctx.accounts.proposal.load_mut()?;
-        require!(proposal.state != Proposal::FINALIZED, InvalidInput);
+        require!(
+            proposal.state != Proposal::FINALIZED,
+            ErrorCode::InvalidInput
+        );
 
         // Require that at least some data was written via write_offchain_config
-        require!(proposal.offchain_config.version > 0, InvalidInput);
-        require!(!proposal.offchain_config.is_empty(), InvalidInput);
+        require!(
+            proposal.offchain_config.version > 0,
+            ErrorCode::InvalidInput
+        );
+        require!(
+            !proposal.offchain_config.is_empty(),
+            ErrorCode::InvalidInput
+        );
         // propose_config must have been called
-        require!(!proposal.oracles.is_empty(), InvalidInput);
+        require!(!proposal.oracles.is_empty(), ErrorCode::InvalidInput);
         // propose_payees must have been called
         let valid_payees = proposal
             .oracles
             .iter()
             .all(|oracle| oracle.payee != Pubkey::default());
-        require!(valid_payees, InvalidInput);
+        require!(valid_payees, ErrorCode::InvalidInput);
 
         proposal.state = Proposal::FINALIZED;
 
@@ -162,7 +174,7 @@ pub mod ocr2 {
         ctx: Context<'_, '_, '_, 'info, AcceptProposal<'info>>,
         digest: Vec<u8>,
     ) -> Result<()> {
-        require!(digest.len() == DIGEST_SIZE, InvalidInput);
+        require!(digest.len() == DIGEST_SIZE, ErrorCode::InvalidInput);
 
         // NOTE: if multisig supported multi instruction transactions, this could be [pay_oracles, accept_proposal]
         pay_oracles_impl(
@@ -178,17 +190,23 @@ pub mod ocr2 {
         let proposal = ctx.accounts.proposal.load()?;
 
         // State version should equal proposal version
-        require!(state.version == proposal.version, InvalidInput);
+        require!(state.version == proposal.version, ErrorCode::InvalidInput);
 
         // Proposal has to be finalized
-        require!(proposal.state == Proposal::FINALIZED, InvalidInput);
+        require!(
+            proposal.state == Proposal::FINALIZED,
+            ErrorCode::InvalidInput
+        );
         // Digest has to match
-        require!(proposal.digest().as_ref() == digest, DigestMismatch);
+        require!(
+            proposal.digest().as_ref() == digest,
+            ErrorCode::DigestMismatch
+        );
 
         // The proposal payees have to use the same mint as the aggregator
         require!(
             proposal.token_mint == state.config.token_mint,
-            InvalidTokenAccount
+            ErrorCode::InvalidTokenAccount
         );
 
         state.oracles.clear();
@@ -246,14 +264,20 @@ pub mod ocr2 {
         f: u8,
     ) -> Result<()> {
         let len = new_oracles.len();
-        require!(f != 0, InvalidInput);
-        require!(len <= MAX_ORACLES, TooManyOracles);
-        require!(3 * usize::from(f) < len, InvalidInput);
+        require!(f != 0, ErrorCode::InvalidInput);
+        require!(len <= MAX_ORACLES, ErrorCode::TooManyOracles);
+        require!(3 * usize::from(f) < len, ErrorCode::InvalidInput);
 
         let mut proposal = ctx.accounts.proposal.load_mut()?;
-        require!(proposal.state != Proposal::FINALIZED, InvalidInput);
+        require!(
+            proposal.state != Proposal::FINALIZED,
+            ErrorCode::InvalidInput
+        );
         // begin_proposal must be called first
-        require!(proposal.offchain_config.version != 0, InvalidInput);
+        require!(
+            proposal.offchain_config.version != 0,
+            ErrorCode::InvalidInput
+        );
 
         // Clear out old oracles
         proposal.oracles.clear();
@@ -277,13 +301,13 @@ pub mod ocr2 {
             .oracles
             .windows(2)
             .any(|pair| pair[0].signer.key == pair[1].signer.key);
-        require!(!duplicate_signer, DuplicateSigner);
+        require!(!duplicate_signer, ErrorCode::DuplicateSigner);
 
         let mut transmitters = BTreeSet::new();
         // check for transmitter duplicates
         for oracle in proposal.oracles.iter() {
             let inserted = transmitters.insert(oracle.transmitter);
-            require!(inserted, DuplicateTransmitter);
+            require!(inserted, ErrorCode::DuplicateTransmitter);
         }
 
         // Store the new f value
@@ -294,17 +318,23 @@ pub mod ocr2 {
 
     pub fn propose_payees(ctx: Context<ProposeConfig>, token_mint: Pubkey) -> Result<()> {
         let mut proposal = ctx.accounts.proposal.load_mut()?;
-        require!(proposal.state != Proposal::FINALIZED, InvalidInput);
+        require!(
+            proposal.state != Proposal::FINALIZED,
+            ErrorCode::InvalidInput
+        );
 
         let payees = ctx.remaining_accounts;
 
         // Need to provide a payee for each oracle
-        require!(proposal.oracles.len() == payees.len(), PayeeOracleMismatch);
+        require!(
+            proposal.oracles.len() == payees.len(),
+            ErrorCode::PayeeOracleMismatch
+        );
 
         // Verify that the remaining accounts are valid token accounts.
         for account in payees {
             let account = Account::<'_, token::TokenAccount>::try_from(account)?;
-            require!(account.mint == token_mint, InvalidTokenAccount);
+            require!(account.mint == token_mint, ErrorCode::InvalidTokenAccount);
         }
 
         for (oracle, payee) in proposal.oracles.iter_mut().zip(payees.iter()) {
@@ -429,7 +459,7 @@ pub mod ocr2 {
         // Validate that the token account is actually for LINK
         require!(
             ctx.accounts.payee.mint == state.config.token_mint,
-            InvalidInput
+            ErrorCode::InvalidInput
         );
 
         let key = ctx.accounts.payee.key();
@@ -443,7 +473,7 @@ pub mod ocr2 {
         // Validate that the instruction was signed by the same authority as the token account
         require!(
             ctx.accounts.payee.owner == ctx.accounts.authority.key(),
-            Unauthorized
+            ErrorCode::Unauthorized
         );
 
         // -- Pay oracle
@@ -486,7 +516,7 @@ pub mod ocr2 {
         // Can't transfer to self
         require!(
             ctx.accounts.payee.key() != ctx.accounts.proposed_payee.key(),
-            InvalidInput
+            ErrorCode::InvalidInput
         );
 
         let mut state = ctx.accounts.state.load_mut()?;
@@ -494,7 +524,7 @@ pub mod ocr2 {
         // Validate that the token account is actually for LINK
         require!(
             ctx.accounts.proposed_payee.mint == state.config.token_mint,
-            InvalidInput
+            ErrorCode::InvalidInput
         );
 
         let oracle = state
@@ -504,10 +534,13 @@ pub mod ocr2 {
             .ok_or(ErrorCode::InvalidInput)?;
 
         // Validate that the instruction was signed by the same authority as the token account
-        require!(oracle.payee == ctx.accounts.payee.key(), InvalidInput);
+        require!(
+            oracle.payee == ctx.accounts.payee.key(),
+            ErrorCode::InvalidInput
+        );
         require!(
             ctx.accounts.payee.owner == ctx.accounts.authority.key(),
-            Unauthorized
+            ErrorCode::Unauthorized
         );
 
         oracle.proposed_payee = ctx.accounts.proposed_payee.key();
@@ -526,11 +559,11 @@ pub mod ocr2 {
         // Validate that the instruction was signed by the same authority as the token account
         require!(
             oracle.proposed_payee == ctx.accounts.proposed_payee.key(),
-            InvalidInput
+            ErrorCode::InvalidInput
         );
         require!(
             ctx.accounts.proposed_payee.owner == ctx.accounts.authority.key(),
-            Unauthorized
+            ErrorCode::Unauthorized
         );
 
         oracle.payee = std::mem::take(&mut oracle.proposed_payee);
@@ -551,7 +584,7 @@ fn pay_oracles_impl<'info>(
 
     require!(
         remaining_accounts.len() == state.oracles.len(),
-        InvalidInput
+        ErrorCode::InvalidInput
     );
 
     let vault_nonce = state.vault_nonce;
@@ -565,7 +598,7 @@ fn pay_oracles_impl<'info>(
         .zip(remaining_accounts)
         .map(|(oracle, payee)| {
             // Ensure specified accounts match the ones inside oracles
-            require!(&oracle.payee == payee.key, InvalidInput);
+            require!(&oracle.payee == payee.key, ErrorCode::InvalidInput);
 
             let amount_gjuels = calculate_owed_payment_gjuels(&billing, oracle, latest_round_id)?;
             // Reset reward and gas reimbursement
@@ -619,7 +652,7 @@ fn transmit_impl<'info>(ctx: Context<Transmit<'info>>, data: &[u8]) -> Result<()
     const CONTEXT_LEN: usize = 96;
     const RAW_REPORT_LEN: usize = CONTEXT_LEN + Report::LEN;
 
-    require!(data.len() > RAW_REPORT_LEN, InvalidInput);
+    require!(data.len() > RAW_REPORT_LEN, ErrorCode::InvalidInput);
 
     let (raw_report, raw_signatures) = data.split_at(RAW_REPORT_LEN);
     let raw_report: [u8; RAW_REPORT_LEN] = raw_report.try_into().unwrap();
@@ -636,7 +669,10 @@ fn transmit_impl<'info>(ctx: Context<Transmit<'info>>, data: &[u8]) -> Result<()
     let config = &state.config;
 
     // Either newer epoch, or same epoch but higher round ID
-    require!((config.epoch, config.round) < (epoch, round), StaleReport);
+    require!(
+        (config.epoch, config.round) < (epoch, round),
+        ErrorCode::StaleReport
+    );
 
     // validate transmitter
     let oracle_idx = state
@@ -647,17 +683,20 @@ fn transmit_impl<'info>(ctx: Context<Transmit<'info>>, data: &[u8]) -> Result<()
 
     require!(
         config.latest_config_digest == *config_digest,
-        DigestMismatch
+        ErrorCode::DigestMismatch
     );
 
     // 64 byte signature + 1 byte recovery id
     const SIGNATURE_LEN: usize = SECP256K1_SIGNATURE_LENGTH + 1;
     // raw_signatures is exactly sized
-    require!(raw_signatures.len() % SIGNATURE_LEN == 0, InvalidInput);
+    require!(
+        raw_signatures.len() % SIGNATURE_LEN == 0,
+        ErrorCode::InvalidInput
+    );
     let signature_count = raw_signatures.len() / SIGNATURE_LEN;
     require!(
         signature_count == usize::from(config.f) + 1,
-        WrongNumberOfSignatures
+        ErrorCode::WrongNumberOfSignatures
     );
     let raw_signatures = raw_signatures
         .chunks(SIGNATURE_LEN)
@@ -692,18 +731,18 @@ fn transmit_impl<'info>(ctx: Context<Transmit<'info>>, data: &[u8]) -> Result<()
 
     require!(
         uniques.count_ones() as usize == signature_count,
-        DuplicateSigner
+        ErrorCode::DuplicateSigner
     );
 
     // -- report():
 
     let report = Report::unpack(raw_report)?;
 
-    require!(config.f < report.observer_count, InvalidInput);
+    require!(config.f < report.observer_count, ErrorCode::InvalidInput);
 
     require!(
         report.median >= state.config.min_answer && report.median <= state.config.max_answer,
-        MedianOutOfRange
+        ErrorCode::MedianOutOfRange
     );
 
     state.config.epoch = epoch;
@@ -781,7 +820,7 @@ impl Report {
         size_of::<u32>() + size_of::<u8>() + 32 + size_of::<i128>() + size_of::<u64>();
 
     pub fn unpack(raw_report: &[u8]) -> Result<Self> {
-        require!(raw_report.len() == Self::LEN, InvalidInput);
+        require!(raw_report.len() == Self::LEN, ErrorCode::InvalidInput);
 
         let data = array_ref![raw_report, 0, Report::LEN];
         let (observations_timestamp, observer_count, observers, median, juels_per_lamport) =
@@ -860,13 +899,13 @@ fn compute_unit_price(instruction_sysvar: &AccountInfo<'_>) -> Result<Option<u64
 
     require!(
         compute_budget_ix.program_id == compute_budget::ID,
-        InvalidInput
+        ErrorCode::InvalidInput
     );
 
-    require!(compute_budget_ix.data[0] == 3, InvalidInput); // SetComputeUnitPrice index
+    require!(compute_budget_ix.data[0] == 3, ErrorCode::InvalidInput); // SetComputeUnitPrice index
 
     // u8, u64
-    require!(compute_budget_ix.data.len() == 9, InvalidInput); // <--
+    require!(compute_budget_ix.data.len() == 9, ErrorCode::InvalidInput); // <--
     let unit_price_micro_lamports =
         u64::from_le_bytes(compute_budget_ix.data[1..1 + 8].try_into().unwrap());
 
@@ -928,7 +967,7 @@ fn has_billing_access(
 
     require!(
         config.billing_access_controller == controller.key(),
-        InvalidInput
+        ErrorCode::InvalidInput
     );
 
     let is_owner = config.owner == authority.key();
@@ -937,7 +976,7 @@ fn has_billing_access(
         || access_controller::has_access(controller, authority.key)
             .map_err(|_| ErrorCode::InvalidInput)?;
 
-    require!(has_access, Unauthorized);
+    require!(has_access, ErrorCode::Unauthorized);
     Ok(())
 }
 
@@ -950,7 +989,7 @@ fn has_requester_access(
 
     require!(
         config.requester_access_controller == controller.key(),
-        InvalidInput
+        ErrorCode::InvalidInput
     );
 
     let is_owner = config.owner == authority.key();
@@ -959,7 +998,7 @@ fn has_requester_access(
         || access_controller::has_access(controller, authority.key)
             .map_err(|_| ErrorCode::InvalidInput)?;
 
-    require!(has_access, Unauthorized);
+    require!(has_access, ErrorCode::Unauthorized);
     Ok(())
 }
 
