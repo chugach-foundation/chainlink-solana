@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use access_controller::AccessController;
 
-mod state;
+pub mod state;
 
 pub use crate::state::{
     with_store, NewTransmission, Store as State, Transmission, Transmissions, HEADER_SIZE,
