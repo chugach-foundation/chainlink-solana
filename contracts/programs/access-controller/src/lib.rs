@@ -9,7 +9,7 @@ declare_id!("9xi644bRR8birboDGdTiwBq3C7VEeR7VuamRYYXCubUW");
 #[constant]
 pub const MAX_ADDRS: usize = 64;
 
-#[zero_copy]
+#[zero_copy(unsafe)]
 pub struct AccessList {
     xs: [Pubkey; MAX_ADDRS],
     len: u64,
@@ -19,7 +19,7 @@ const_assert!(
     mem::size_of::<AccessList>() == mem::size_of::<u64>() + mem::size_of::<Pubkey>() * MAX_ADDRS
 );
 
-#[account(zero_copy)]
+#[account(zero_copy(unsafe))]
 pub struct AccessController {
     pub owner: Pubkey,
     pub proposed_owner: Pubkey,

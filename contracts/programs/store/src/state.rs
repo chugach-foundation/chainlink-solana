@@ -206,6 +206,13 @@ mod tests {
             8 + HEADER_SIZE
                 + (live_length + historical_length) * size_of::<Transmission>()
         ];
+        {
+            println!(
+                "Size Of Transmission: {} - Data Length: {}",
+                size_of::<Transmission>(),
+                data.len()
+            );
+        }
         let header = &mut data[..8 + HEADER_SIZE]; // use a subslice to ensure the header fits into HEADER_SIZE bytes
         let mut cursor = std::io::Cursor::new(header);
 
