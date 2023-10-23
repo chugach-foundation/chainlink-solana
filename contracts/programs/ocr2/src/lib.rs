@@ -33,7 +33,7 @@ pub mod ocr2 {
         let mut state = ctx.accounts.state.load_init()?;
         state.version = STATE_VERSION;
 
-        state.vault_nonce = *ctx.bumps.get("vault_authority").unwrap();
+        state.vault_nonce = ctx.bumps.vault_authority;
         state.feed = ctx.accounts.feed.key();
 
         let config = &mut state.config;
@@ -51,7 +51,7 @@ pub mod ocr2 {
         Ok(())
     }
 
-    pub fn close<'info>(ctx: Context<'_, '_, '_, 'info, Close<'info>>) -> Result<()> {
+    pub fn close<'info>(ctx: Context<'_, '_, 'info, 'info, Close<'info>>) -> Result<()> {
         // Pay out any remaining balances
         pay_oracles_impl(
             ctx.accounts.state.clone(),
@@ -171,7 +171,7 @@ pub mod ocr2 {
     }
 
     pub fn accept_proposal<'info>(
-        ctx: Context<'_, '_, '_, 'info, AcceptProposal<'info>>,
+        ctx: Context<'_, '_, 'info, 'info, AcceptProposal<'info>>,
         digest: Vec<u8>,
     ) -> Result<()> {
         require!(digest.len() == DIGEST_SIZE, ErrorCode::InvalidInput);
@@ -316,7 +316,10 @@ pub mod ocr2 {
         Ok(())
     }
 
-    pub fn propose_payees(ctx: Context<ProposeConfig>, token_mint: Pubkey) -> Result<()> {
+    pub fn propose_payees<'info>(
+        ctx: Context<'_, '_, 'info, 'info, ProposeConfig<'info>>,
+        token_mint: Pubkey,
+    ) -> Result<()> {
         let mut proposal = ctx.accounts.proposal.load_mut()?;
         require!(
             proposal.state != Proposal::FINALIZED,
@@ -368,16 +371,16 @@ pub mod ocr2 {
     #[inline(never)]
     pub fn transmit<'info>(
         program_id: &Pubkey,
-        accounts: &[AccountInfo<'info>],
+        accounts: &'info [AccountInfo<'info>],
         data: &[u8],
     ) -> Result<()> {
         // Based on https://github.com/project-serum/anchor/blob/2390a4f16791b40c63efe621ffbd558e354d5303/lang/syn/src/codegen/program/handlers.rs#L696-L737
         // Use a raw instruction to skip data decoding, but keep using Anchor contexts.
 
-        let mut bumps = std::collections::BTreeMap::new();
+        let mut bumps = TransmitBumps::default();
         let mut reallocs = std::collections::BTreeSet::new();
         // Deserialize accounts.
-        let mut remaining_accounts: &[AccountInfo] = accounts;
+        let mut remaining_accounts: &'info [AccountInfo<'info>] = accounts;
         let mut accounts = Transmit::try_accounts(
             program_id,
             &mut remaining_accounts,
@@ -403,7 +406,7 @@ pub mod ocr2 {
 
     #[access_control(has_billing_access(&ctx.accounts.state, &ctx.accounts.access_controller, &ctx.accounts.authority))]
     pub fn set_billing<'info>(
-        ctx: Context<'_, '_, '_, 'info, SetBilling<'info>>,
+        ctx: Context<'_, '_, 'info, 'info, SetBilling<'info>>,
         observation_payment_gjuels: u32,
         transmission_payment_gjuels: u32,
     ) -> Result<()> {
@@ -501,7 +504,7 @@ pub mod ocr2 {
     }
 
     #[access_control(has_billing_access(&ctx.accounts.state, &ctx.accounts.access_controller, &ctx.accounts.authority))]
-    pub fn pay_oracles<'info>(ctx: Context<'_, '_, '_, 'info, SetBilling<'info>>) -> Result<()> {
+    pub fn pay_oracles<'info>(ctx: Context<'_, '_, 'info, 'info, SetBilling<'info>>) -> Result<()> {
         pay_oracles_impl(
             ctx.accounts.state.clone(),
             ctx.accounts.token_program.to_account_info(),
@@ -576,7 +579,7 @@ fn pay_oracles_impl<'info>(
     token_program: AccountInfo<'info>,
     token_vault: AccountInfo<'info>,
     vault_authority: AccountInfo<'info>,
-    remaining_accounts: &[AccountInfo<'info>],
+    remaining_accounts: &'info [AccountInfo<'info>],
     token_receiver: AccountInfo<'info>,
 ) -> Result<()> {
     let state_id = state.key();
@@ -1071,7 +1074,9 @@ pub mod query {
         pub count: u32,
     }
 
-    pub fn latest_config_details(account: &AccountInfo) -> Result<LatestConfig> {
+    pub fn latest_config_details<'info>(
+        account: &'info AccountInfo<'info>,
+    ) -> Result<LatestConfig> {
         let loader = AccountLoader::<State>::try_from(account)?;
         let state = loader.load()?;
         let config = state.config;
@@ -1085,8 +1090,8 @@ pub mod query {
     // Returns the total link available for payment from a specific token vault
     //
     // This allows oracles to check that sufficient LINK balance is available
-    pub fn link_available_for_payment(
-        account: &AccountInfo,
+    pub fn link_available_for_payment<'info>(
+        account: &'info AccountInfo<'info>,
         token_vault: &AccountInfo,
     ) -> Result<LinkAvailableForPayment> {
         let loader = AccountLoader::<State>::try_from(account)?;
@@ -1104,9 +1109,9 @@ pub mod query {
     // Returns the total number of observation counts for a specific transmitter
     //
     // This is the number of observations oracle is due to be reimbursed for.
-    pub fn oracle_observation_count(
-        account: &AccountInfo,
-        transmitter: &AccountInfo,
+    pub fn oracle_observation_count<'info>(
+        account: &'info AccountInfo<'info>,
+        transmitter: &'info AccountInfo<'info>,
     ) -> Result<OracleObservationCount> {
         let loader = AccountLoader::<State>::try_from(account)?;
         let state = loader.load()?;

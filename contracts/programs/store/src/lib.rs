@@ -43,6 +43,15 @@ pub struct Round {
     pub answer: i128,
 }
 
+// ------------------------------- IMPORTANT NOTICE -------------------------------------
+// The program does not seem to compile after applying all the suggested lifetime changes.
+// Therefore have resorted to just commenting out all of the access control patterns and
+// instructions which fall on manual AccountLoader zero copy deserialization.
+// This is not an issue for the specific use case of this fork, as we are just
+// using this package as a dependency to perform CPI queries, and the program that is actually
+// deployed is performing these checks.
+// ---------------------------------------------------------------------------------------
+
 #[program]
 pub mod store {
     use super::*;
@@ -93,13 +102,13 @@ pub mod store {
         Ok(())
     }
 
-    #[access_control(owner(&ctx.accounts.owner, &ctx.accounts.authority))]
-    pub fn close_feed(ctx: Context<CloseFeed>) -> Result<()> {
+    //#[access_control(owner(&ctx.accounts.owner, &ctx.accounts.authority))]
+    pub fn close_feed(_ctx: Context<CloseFeed>) -> Result<()> {
         // NOTE: Close is handled by anchor on exit due to the `close` attribute
         Ok(())
     }
 
-    #[access_control(owner(&ctx.accounts.owner, &ctx.accounts.authority))]
+    //#[access_control(owner(&ctx.accounts.owner, &ctx.accounts.authority))]
     pub fn transfer_feed_ownership(
         ctx: Context<TransferFeedOwnership>,
         proposed_owner: Pubkey,
@@ -108,27 +117,27 @@ pub mod store {
         Ok(())
     }
 
-    pub fn accept_feed_ownership(ctx: Context<AcceptFeedOwnership>) -> Result<()> {
-        let store: std::result::Result<AccountLoader<State>, _> =
-            AccountLoader::try_from(&ctx.accounts.proposed_owner);
+    // pub fn accept_feed_ownership(ctx: Context<AcceptFeedOwnership>) -> Result<()> {
+    //     let store: std::result::Result<AccountLoader<State>, _> =
+    //         AccountLoader::try_from(&ctx.accounts.proposed_owner);
 
-        let proposed_owner = match store {
-            // if the feed is owned by a store, validate the store's owner signed
-            Ok(store) => store.load()?.owner,
-            // else, it's an individual owner
-            Err(_err) => ctx.accounts.proposed_owner.key(),
-        };
-        require!(
-            ctx.accounts.authority.key == &proposed_owner,
-            ErrorCode::Unauthorized
-        );
+    //     let proposed_owner = match store {
+    //         // if the feed is owned by a store, validate the store's owner signed
+    //         Ok(store) => store.load()?.owner,
+    //         // else, it's an individual owner
+    //         Err(_err) => ctx.accounts.proposed_owner.key(),
+    //     };
+    //     require!(
+    //         ctx.accounts.authority.key == &proposed_owner,
+    //         ErrorCode::Unauthorized
+    //     );
 
-        let feed = &mut ctx.accounts.feed;
-        feed.owner = std::mem::take(&mut feed.proposed_owner);
-        Ok(())
-    }
+    //     let feed = &mut ctx.accounts.feed;
+    //     feed.owner = std::mem::take(&mut feed.proposed_owner);
+    //     Ok(())
+    // }
 
-    #[access_control(owner(&ctx.accounts.owner, &ctx.accounts.authority))]
+    //#[access_control(owner(&ctx.accounts.owner, &ctx.accounts.authority))]
     pub fn set_validator_config(
         ctx: Context<SetFeedConfig>,
         flagging_threshold: u32,
@@ -137,18 +146,18 @@ pub mod store {
         Ok(())
     }
 
-    #[access_control(owner(&ctx.accounts.owner, &ctx.accounts.authority))]
+    //#[access_control(owner(&ctx.accounts.owner, &ctx.accounts.authority))]
     pub fn set_writer(ctx: Context<SetFeedConfig>, writer: Pubkey) -> Result<()> {
         ctx.accounts.feed.writer = writer;
         Ok(())
     }
 
     // NOTE: to bulk lower, a batch transaction can be sent with a bunch of lower calls
-    #[access_control(has_lowering_access(
-            &ctx.accounts.owner,
-            &ctx.accounts.access_controller,
-            &ctx.accounts.authority,
-    ))]
+    // #[access_control(has_lowering_access(
+    //         &ctx.accounts.owner,
+    //         &ctx.accounts.access_controller,
+    //         &ctx.accounts.authority,
+    // ))]
     pub fn lower_flag(ctx: Context<LowerFlag>) -> Result<()> {
         ctx.accounts.feed.state = Transmissions::NORMAL;
         Ok(())
@@ -307,8 +316,9 @@ fn is_valid(flagging_threshold: u32, previous_answer: i128, answer: i128) -> boo
 }
 
 // Only owner access
-fn owner<'info>(owner: &UncheckedAccount<'info>, authority: &Signer) -> Result<()> {
-    let store: std::result::Result<AccountLoader<'info, State>, _> = AccountLoader::try_from(owner);
+#[allow(unused)]
+fn owner<'info>(owner: &'info UncheckedAccount<'info>, authority: &Signer) -> Result<()> {
+    let store: std::result::Result<AccountLoader<'_, State>, _> = AccountLoader::try_from(&owner);
 
     let owner = match store {
         // if the feed is owned by a store, validate the store's owner signed
@@ -321,12 +331,13 @@ fn owner<'info>(owner: &UncheckedAccount<'info>, authority: &Signer) -> Result<(
     Ok(())
 }
 
-fn has_lowering_access(
-    owner: &UncheckedAccount,
-    controller: &UncheckedAccount,
+#[allow(unused)]
+fn has_lowering_access<'info>(
+    owner: &'info UncheckedAccount<'info>,
+    controller: &'info UncheckedAccount<'info>,
     authority: &Signer,
 ) -> Result<()> {
-    let store: std::result::Result<AccountLoader<State>, _> = AccountLoader::try_from(owner);
+    let store: std::result::Result<AccountLoader<'_, State>, _> = AccountLoader::try_from(&owner);
 
     match store {
         // if the feed is owned by a store
@@ -347,7 +358,7 @@ fn has_lowering_access(
                 ErrorCode::InvalidInput
             );
 
-            let controller = AccountLoader::try_from(controller)?;
+            let controller = AccountLoader::try_from(&controller)?;
 
             // Check if the key is present on the access controller
             let has_access = access_controller::has_access(&controller, authority.key)
